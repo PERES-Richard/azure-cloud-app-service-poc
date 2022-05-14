@@ -14,7 +14,8 @@ First, in order to run this script you must have :
 - A working Azure account and Azure CLI set up
 - Have Terraform >=v1.0.11 installed
 - Have docker installed (to push the application container on the remote repository)
-- Set the `application-prefix-name` and `container-registry-name` variables set (in your environment or via a `terraform.tfvars` file for example)
+- Set the `application-prefix`, `container-image-name`, `container-file-name` and `container-registry-name` variables set (in your environment or via a `terraform.tfvars` file for example)
+- Have your application's Docker image in archive format (or edit the `docker-push` local-exec resource in the tf file)
 
 To run the script simply `terraform apply` it (after an `init` and `plan`).
 The Terraform script will then :

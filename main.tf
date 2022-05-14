@@ -18,18 +18,24 @@ provider "azurerm" {
 
 variable "location" {
   default = "centralus"
-  # "australiacentral,australiacentral2,australiaeast,australiasoutheast,brazilsouth,brazilsoutheast,brazilus,canadacentral,canadaeast,centralindia,centralus,centraluseuap,eastasia,eastus,eastus2,eastus2euap,francecentral,francesouth,germanynorth,germanywestcentral,japaneast,japanwest,jioindiacentral,jioindiawest,koreacentral,koreasouth,northcentralus,northeurope,norwayeast,norwaywest,qatarcentral,southafricanorth,southafricawest,southcentralus,southeastasia,southindia,swedencentral,swedensouth,switzerlandnorth,switzerlandwest,uaecentral,uaenorth,uksouth,ukwest,westcentralus,westeurope,westindia,westus,westus2,westus3,israelcentral,italynorth,polandcentral,taiwannorth,taiwannorthwest"
+  # can be one of : australiacentral,australiacentral2,australiaeast,australiasoutheast,brazilsouth,brazilsoutheast,brazilus,canadacentral,canadaeast,centralindia,centralus,centraluseuap,eastasia,eastus,eastus2,eastus2euap,francecentral,francesouth,germanynorth,germanywestcentral,japaneast,japanwest,jioindiacentral,jioindiawest,koreacentral,koreasouth,northcentralus,northeurope,norwayeast,norwaywest,qatarcentral,southafricanorth,southafricawest,southcentralus,southeastasia,southindia,swedencentral,swedensouth,switzerlandnorth,switzerlandwest,uaecentral,uaenorth,uksouth,ukwest,westcentralus,westeurope,westindia,westus,westus2,westus3,israelcentral,italynorth,polandcentral,taiwannorth,taiwannorthwest
+  # but must be a location where AppService service is available
 }
 
-variable "container-name" {
-  default = "devops-test"
+variable "container-image-name" {
+  description = "Name of the Docker's image to be extracted, pushed to the remote repository and run on by the App Service container."
+  type     = string
+  #nullable = false # For Terraform >=v1.1 only
 }
 
 variable "container-file-name" {
-  default = "devops-test.tar"
+  description = "Path and name of the application's Docker image to be used for the App Service container (eg: 'my-image.tar'). "
+  type     = string
+  #nullable = false # For Terraform >=v1.1 only
 }
 
-variable "application-prefix-name" {
+variable "application-prefix" {
+  description = "The solution name to be applied as prefix for all resource creation. Pref in [a-z0-9-] format (eg: 'my-app')."
   type     = string
   #nullable = false # For Terraform >=v1.1 only
 }
@@ -43,6 +49,7 @@ variable "container-image-tag-slot" {
 }
 
 variable "container-registry-name" {
+  description = "The name of the Azure Container Registry"
   type     = string
   #nullable = false # For Terraform >=v1.1 only
 }
@@ -51,7 +58,7 @@ data "azurerm_client_config" "current" {}
 
 #### Resource Group ####
 resource "azurerm_resource_group" "resource-group" {
-  name     = "${var.application-prefix-name}-rg"
+  name     = "${var.application-prefix}-rg"
   location = var.location
 }
 
@@ -67,7 +74,7 @@ resource "azurerm_user_assigned_identity" "uai" {
 #### Key Vault (for registry encryption) ####
 
 resource "azurerm_key_vault" "key-vault" {
-  name                        = "${var.application-prefix-name}-keyvault-4"
+  name                        = "${var.application-prefix}-keyvault-4"
   location                    = azurerm_resource_group.resource-group.location
   resource_group_name         = azurerm_resource_group.resource-group.name
   enabled_for_disk_encryption = true
@@ -82,7 +89,7 @@ resource "azurerm_key_vault" "key-vault" {
 
   # Adding TAG's to your Azure resources
   tags = {
-    ProjectName = var.application-prefix-name
+    ProjectName = var.application-prefix
     Env         = "dev"
   }
 }
@@ -219,7 +226,7 @@ module "container-registry" {
 
   # Adding TAG's to your Azure resources
   tags = {
-    ProjectName = var.application-prefix-name
+    ProjectName = var.application-prefix
     Env         = "dev"
   }
 }
@@ -237,9 +244,9 @@ resource "null_resource" "docker_push" {
     command     = <<-EOT
         az acr login -n ${var.container-registry-name}
         docker image load --input ${var.container-file-name}
-        docker image tag ${var.container-name}:latest ${var.container-registry-name}.azurecr.io/${var.container-name}:latest
-        docker push ${var.container-registry-name}.azurecr.io/${var.container-name}:latest
-        echo "Docker image '${var.container-name}:latest' from file '${var.container-file-name}' successfully uploaded to ACR repository '${var.container-registry-name}.azurecr.io'"
+        docker image tag ${var.container-image-name}:latest ${var.container-registry-name}.azurecr.io/${var.container-image-name}:latest
+        docker push ${var.container-registry-name}.azurecr.io/${var.container-image-name}:latest
+        echo "Docker image '${var.container-image-name}:latest' from file '${var.container-file-name}' successfully uploaded to ACR repository '${var.container-registry-name}.azurecr.io'"
       EOT
   }
 }
@@ -255,7 +262,7 @@ locals {
 
 ##### App Service Plan #####
 resource "azurerm_service_plan" "app-service-plan" {
-  name                = "${var.application-prefix-name}-app-service-plan"
+  name                = "${var.application-prefix}-app-service-plan"
   location            = azurerm_resource_group.resource-group.location
   resource_group_name = azurerm_resource_group.resource-group.name
   os_type             = "Linux"
@@ -266,7 +273,7 @@ resource "azurerm_service_plan" "app-service-plan" {
 
 ##### App Service #####
 resource "azurerm_linux_web_app" "app-service" {
-  name                = "${var.application-prefix-name}-app-service"
+  name                = "${var.application-prefix}-app-service"
   location            = azurerm_resource_group.resource-group.location
   resource_group_name = azurerm_resource_group.resource-group.name
   service_plan_id     = azurerm_service_plan.app-service-plan.id
@@ -277,7 +284,7 @@ resource "azurerm_linux_web_app" "app-service" {
     always_on = "true"
 
     application_stack {
-      docker_image     = "${var.container-registry-name}.azurecr.io/${var.container-name}"
+      docker_image     = "${var.container-registry-name}.azurecr.io/${var.container-image-name}"
       docker_image_tag = var.container-image-tag
     }
 
@@ -293,14 +300,14 @@ resource "azurerm_linux_web_app" "app-service" {
 
   # Adding TAG's to your Azure resources
   tags = {
-    ProjectName = var.application-prefix-name
+    ProjectName = var.application-prefix
     Env         = "dev"
   }
 }
 
 #### Staging for 0 downtime ####
 resource "azurerm_linux_web_app_slot" "app-service-staging" {
-  name           = "${var.application-prefix-name}-app-service-staging-slot"
+  name           = "${var.application-prefix}-app-service-staging-slot"
   app_service_id = azurerm_linux_web_app.app-service.id
 
   depends_on = [azurerm_linux_web_app.app-service]
@@ -309,7 +316,7 @@ resource "azurerm_linux_web_app_slot" "app-service-staging" {
     always_on = "true"
 
     application_stack {
-      docker_image     = "${var.container-registry-name}.azurecr.io/${var.container-name}"
+      docker_image     = "${var.container-registry-name}.azurecr.io/${var.container-image-name}"
       docker_image_tag = var.container-image-tag-slot
     }
 
@@ -325,14 +332,14 @@ resource "azurerm_linux_web_app_slot" "app-service-staging" {
 
   # Adding TAG's to your Azure resources
   tags = {
-    ProjectName = var.application-prefix-name
+    ProjectName = var.application-prefix
     Env         = "dev"
   }
 }
 
 #### Monitoring ####
 resource "azurerm_application_insights" "app-insights" {
-  name                = "${var.application-prefix-name}-insights"
+  name                = "${var.application-prefix}-insights"
   location            = azurerm_resource_group.resource-group.location
   resource_group_name = azurerm_resource_group.resource-group.name
 
