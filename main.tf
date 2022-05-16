@@ -24,24 +24,24 @@ variable "location" {
 
 variable "container-image-name" {
   description = "Name of the Docker's image to be extracted, pushed to the remote repository and run on by the App Service container."
-  type     = string
+  type        = string
   #nullable = false # For Terraform >=v1.1 only
 }
 
 variable "container-file-name" {
   description = "Path and name of the application's Docker image to be used for the App Service container (eg: 'my-image.tar'). "
-  type     = string
+  type        = string
   #nullable = false # For Terraform >=v1.1 only
 }
 
 variable "application-prefix" {
   description = "The solution name to be applied as prefix for all resource creation. Pref in [a-z0-9-] format (eg: 'my-app')."
-  type     = string
+  type        = string
   #nullable = false # For Terraform >=v1.1 only
 }
 
 variable "container-image-tag" {
-  default = "node"
+  default = "node2"
 }
 
 variable "container-image-tag-slot" {
@@ -50,7 +50,7 @@ variable "container-image-tag-slot" {
 
 variable "container-registry-name" {
   description = "The name of the Azure Container Registry"
-  type     = string
+  type        = string
   #nullable = false # For Terraform >=v1.1 only
 }
 
@@ -296,6 +296,19 @@ resource "azurerm_linux_web_app" "app-service" {
     identity_ids = [azurerm_user_assigned_identity.uai.id]
   }
 
+  logs {
+
+    detailed_error_messages = true
+    failed_request_tracing  = true
+
+    http_logs {
+      file_system {
+        retention_in_days = 0
+        retention_in_mb   = 35
+      }
+    }
+  }
+
   app_settings = local.env_variables
 
   # Adding TAG's to your Azure resources
@@ -326,6 +339,19 @@ resource "azurerm_linux_web_app_slot" "app-service-staging" {
   identity {
     type         = "SystemAssigned, UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.uai.id]
+  }
+
+  logs {
+
+    detailed_error_messages = true
+    failed_request_tracing  = true
+
+    http_logs {
+      file_system {
+        retention_in_days = 0
+        retention_in_mb   = 35
+      }
+    }
   }
 
   app_settings = local.env_variables
